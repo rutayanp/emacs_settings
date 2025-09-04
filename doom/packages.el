@@ -47,5 +47,9 @@
 ;; (unpin! pinned-package another-pinned-package)
 ;; ...Or *all* packages (NOT RECOMMENDED; will likely break things)
 ;; (unpin! t)
-
 (package! blacken)
+
+(package! flatland-theme)
+(package! flycheck-plantuml)
+(package! plantuml-mode)
+(package! jetbrains-darcula-theme)
