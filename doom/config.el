@@ -32,10 +32,9 @@
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
-;;(setq doom-theme 'doom-one)
-(setq doom-theme nil)
-(disable-theme 'doom-one)  ; Explicitly disable if already loaded
-(setq doom-font "Fira Code")
+(setq doom-theme 'modus-operandi)
+;;(setq doom-theme 'jetbrains-darcula)
+;;(setq doom-theme 'doom-gruvbox)
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
 ;; numbers are disabled. For relative line numbers, set this to `relative'.
@@ -78,42 +77,82 @@
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 
-(use-package blacken
-  :after python
-  :hook (python-mode . blacken-mode))  ; Auto-format on save
-
 (after! lsp-clangd
-  (setq lsp-clangd-binary-path "/usr/bin/clangd"))  ; Adjust path if needed
+  ;; Set clangd binary path (if not in PATH)
+  ;; (setq lsp-clangd-binary-path "/usr/bin/clangd")
+  
+  ;; clangd arguments
+  (setq lsp-clangd-server-args
+        '("--background-index"
+          "--clang-tidy"
+          "--completion-style=detailed"
+          "--header-insertion=iwyu"
+          "--header-insertion-decorators"))
+  
+  ;; Enable clangd for C/C++ modes
+  (set-lsp-priority! 'clangd 1))
 
-;; In ~/.doom.d/config.el - optional optimizations
+;; Optional: LSP performance tweaks
 (after! lsp-mode
-  (setq lsp-clangd-server-command '("clangd"
-                                   "--background-index"
-                                   "--clang-tidy"
-                                   "--completion-style=bundled"
-                                   "--cross-file-rename"
-                                   "--header-insertion=iwyu")))
+  (setq lsp-idle-delay 0.1
+        lsp-enable-file-watchers nil
+        lsp-enable-folding nil
+        lsp-enable-symbol-highlighting t
+        lsp-enable-snippet t))
 
-;; Company completion settings
-(after! company
-  (setq company-idle-delay 0.2)          ; Start completion after 0.2s
-  (setq company-minimum-prefix-length 1) ; Start after 1 character
-  (setq company-show-numbers t)          ; Show numbers for selection
-  (setq company-tooltip-align-annotations t))
+;; Detect if running in tmux
+(defun running-in-tmux-p ()
+  "Check if Emacs is running inside tmux."
+  (getenv "TMUX"))
 
-;; LSP completion configuration
+;; Disable ESC bindings when in tmux
+(when (running-in-tmux-p)
+  (after! evil
+    ;; Remove ESC from key translation
+    (define-key key-translation-map [escape] nil)
+    (define-key function-key-map [escape] nil)
+
+    ;; Make ESC do nothing or just normal state
+    (define-key evil-normal-state-map [escape] 'ignore)
+    (define-key evil-insert-state-map [escape] 'evil-normal-state)
+    (define-key evil-visual-state-map [escape] 'evil-normal-state)
+
+    ;; Prevent ESC from being Meta
+    (setq evil-escape-delay 0)))
+
+;; Map Super+b to toggle the Treemacs project drawer
+(map! "M-B" #'+treemacs/toggle)
+
+(after! lsp-faces
+  ;; Face for read access (e.g., using a variable)
+  (set-face-attribute 'lsp-document-highlight-read nil
+                      :weight 'bold      ;; Set the font weight to bold
+                      :underline nil)   ;; Explicitly remove the underline
+
+  ;; Face for write access (e.g., defining or assigning a variable)
+  (set-face-attribute 'lsp-document-highlight-write nil
+                      :weight 'bold      ;; Set the font weight to bold
+                      :underline nil))  ;; Explicitly remove the underline
+
+(defun my-force-vertical-split-for-python-advice (orig-fn &rest args)
+  "Force `run-python` to open the REPL in a vertical split."
+  (let ((split-width-threshold nil)
+        (split-height-threshold 0))
+    (apply orig-fn args)))
+
+(advice-add #'python-shell-get-or-create-buffer :around #'my-force-vertical-split-for-python-advice)
+
 (after! lsp-mode
-  (setq lsp-completion-provider :company-capf)
-  (setq lsp-enable-snippet t)            ; Enable snippets
-  (setq lsp-completion-show-detail t)    ; Show more details
-  (setq lsp-completion-show-kind t))     ; Show completion item kinds
+  (setq lsp-disabled-clients '(ruff-lsp ruff))
+  ;; Ensure pylsp is preferred
+  (setq lsp-pylsp-server-command "pylsp"))
 
-;; Set clang-format as the formatter for C/C++
-(after! cc-mode
-  (set-formatter! 'clang-format
-    '("clang-format" "-assume-filename" buffer-file-name)
-    :modes '(c-mode c++-mode)))
+;; (after! hl-line)
+;; (custom-set-faces!
+;;   '(hl-line :background "#87CEEB"))  ; Powder blue
 
-;; Enable format on save for C/C++ files
-(add-hook 'c-mode-hook #'format-all-mode)
-(add-hook 'c++-mode-hook #'format-all-mode)
+(defun +magit/status-split-right ()
+  "Open Magit status in a right split."
+  (interactive)
+  (select-window (split-window-right))
+  (magit-status))
