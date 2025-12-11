@@ -32,9 +32,12 @@
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
-(setq doom-theme 'modus-operandi)
-;;(setq doom-theme 'jetbrains-darcula)
-;;(setq doom-theme 'doom-gruvbox)
+;; (setq doom-theme 'jetbrains-darcula)
+;; (setq doom-theme 'doom-gruvbox)
+;; (setq doom-theme nil)
+;; (setq doom-theme 'doom-dracula)
+;; (setq doom-theme 'doom-spacegrey)
+(setq doom-theme 'atom-one-dark)
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
 ;; numbers are disabled. For relative line numbers, set this to `relative'.
@@ -79,7 +82,7 @@
 
 (after! lsp-clangd
   ;; Set clangd binary path (if not in PATH)
-  ;; (setq lsp-clangd-binary-path "/usr/bin/clangd")
+  (setq lsp-clangd-binary-path "/usr/bin/clangd")
   
   ;; clangd arguments
   (setq lsp-clangd-server-args
@@ -123,16 +126,27 @@
 ;; Map Super+b to toggle the Treemacs project drawer
 (map! "M-B" #'+treemacs/toggle)
 
-(after! lsp-faces
-  ;; Face for read access (e.g., using a variable)
-  (set-face-attribute 'lsp-document-highlight-read nil
-                      :weight 'bold      ;; Set the font weight to bold
-                      :underline nil)   ;; Explicitly remove the underline
 
-  ;; Face for write access (e.g., defining or assigning a variable)
-  (set-face-attribute 'lsp-document-highlight-write nil
-                      :weight 'bold      ;; Set the font weight to bold
-                      :underline nil))  ;; Explicitly remove the underline
+;; Override LSP highlight faces to use bolding instead of underlining.
+(custom-set-faces!
+  ;; Face for tokens being read
+  '(lsp-face-high;; light-read
+    :inherit lsp-face-highlight-read
+    :underline nil
+    :weight bold)
+
+  ;; Face for tokens being written
+  '(lsp-face-highlight-write
+    :inherit lsp-face-highlight-write
+    :underline nil
+    :weight bold)
+
+  ;; Other semantic tokens might also need adjustment.
+  ;; For example, you may want to apply bold to parameters.
+  '(lsp-semantic-token-face-parameter
+    :inherit lsp-semantic-token-face-parameter
+    :underline nil
+    :weight bold))
 
 (defun my-force-vertical-split-for-python-advice (orig-fn &rest args)
   "Force `run-python` to open the REPL in a vertical split."
@@ -142,17 +156,90 @@
 
 (advice-add #'python-shell-get-or-create-buffer :around #'my-force-vertical-split-for-python-advice)
 
-(after! lsp-mode
-  (setq lsp-disabled-clients '(ruff-lsp ruff))
-  ;; Ensure pylsp is preferred
-  (setq lsp-pylsp-server-command "pylsp"))
+;; (after! lsp-mode
+;;   (setq lsp-disabled-clients '(ruff-lsp ruff))
+;;   ;; Ensure pylsp is preferred
+;;   (setq lsp-pylsp-server-command "pylsp"))
 
 ;; (after! hl-line)
 ;; (custom-set-faces!
-;;   '(hl-line :background "#87CEEB"))  ; Powder blue
+;;   ;;'(hl-line :background "#87CEEB"))  ; Powder blue
+;;   '(hl-line :background "#5c5c5c"))
+
+;; (custom-set-faces
+;;  '(vertico-current ((t (:background "#5c5c5c")))))
 
 (defun +magit/status-split-right ()
   "Open Magit status in a right split."
   (interactive)
   (select-window (split-window-right))
   (magit-status))
+
+;; Enable clipboard integration
+(setq select-enable-clipboard t)
+(setq select-enable-primary t)
+
+;; (after! cc-mode
+;;   (setq-hook! '(c-mode-hook c++-mode-hook objc-mode-hook)
+;;     +format-on-save-enabled-modes
+;;     (remove 'c-mode
+;;             (remove 'c++-mode
+;;                     (remove 'objc-mode +format-on-save-enabled-modes)))))
+
+(use-package! writeroom-mode
+  :commands writeroom-mode
+  :config
+  (setq writeroom-width 100                    ; Text column width
+        writeroom-mode-line t                  ; Keep modeline visible
+        writeroom-global-effects nil           ; Don't go fullscreen
+        writeroom-fringes-outside-margins nil) ; Keep fringes inside
+
+  ;; Optional: bind to a key
+  (map! :leader "t w" #'writeroom-mode))
+
+(defun my/docker-build ()
+  "Build project using Docker"
+  (interactive)
+  (let ((default-directory (projectile-project-root))
+        (compilation-buffer-name-function (lambda (_) "*docker-build*")))
+    (compile "docker run -v ./:/checkout -it -t ghcr.io/lightmatter-ai/system-software-images/congo-ops-image:latest /checkout/scripts/test-build.sh --xmr-mode-hw kenya_fpga")))
+
+(map! :leader
+      :desc "Build with Docker"
+      "b b" #'my/docker-build)
+
+(setq ef-themes-disable-other-themes t)
+
+(defun my/format-git-diff ()
+  "Format the changes in the last commit using clang-format-diff.py"
+  (interactive)
+  (let ((default-directory (projectile-project-root)))
+    (shell-command "git diff -U0 --no-color --relative HEAD^ | clang-format-diff.py -p1 -i")
+    (message "Formatted git diff with clang-format")))
+
+(global-display-fill-column-indicator-mode -1)
+
+(setq fill-column 80)
+(require 'fill-column-indicator)
+
+(setq fci-rule-color "green")
+(setq fci-rule-character ?|)
+(setq fci-rule-use-dashes t)  ;; This gives you dashed lines
+(setq fci-dash-pattern 0.5)   ;; Adjust dash density if needed
+
+(add-hook 'prog-mode-hook 'fci-mode)
+
+(defun my/save-buffer-no-formatting ()
+  "Save the current buffer without running any formatting hooks.
+This bypasses before-save-hook, format-all-mode, and other formatters."
+  (interactive)
+  (let ((before-save-hook nil)
+        (after-save-hook nil))
+    ;; Temporarily disable format-all if it's active
+    (when (bound-and-true-p format-all-mode)
+      (format-all-mode -1)
+      (save-buffer)
+      (format-all-mode 1))
+    ;; If format-all isn't active, just save with hooks disabled
+    (unless (bound-and-true-p format-all-mode)
+      (save-buffer))))
